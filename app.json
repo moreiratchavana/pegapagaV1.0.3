@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "pegapaga",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true
     },
@@ -23,7 +23,7 @@
       "package": "com.moreiraht.pegapaga"
     },
     "web": {
-      "output": "static",
+      "output": "server",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -43,10 +43,12 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": false
     },
     "extra": {
-      "router": {},
+      "router": {
+        "appDir": "./app"
+      },
       "eas": {
         "projectId": "d59714f6-9cab-4e1f-bd8a-20b74079fb25"
       }

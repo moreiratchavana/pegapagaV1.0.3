@@ -1,266 +1,306 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const { height } = Dimensions.get('window');
+import { Animated, Easing, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function Index() {
-  const [etapa, setEtapa] = useState(1);
-  const [valor, setValor] = useState("500.00");
-  const [showVersion, setShowVersion] = useState(true);
+  const [etapa, setEtapa] = useState(1); // 1=teclado, 2=fingerprint, 3=pin, 4=sucesso
+  const [rawValue, setRawValue] = useState('');
+  const [pin, setPin] = useState('');
+  const [aprovado, setAprovado] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
 
-  // Splash
-  const moveLogo = useRef(new Animated.Value(0)).current;
-  const buttonFade = useRef(new Animated.Value(0)).current;
-
-  // Transição entre telas
   const telaOpacidade = useRef(new Animated.Value(1)).current;
   const telaSlide = useRef(new Animated.Value(0)).current;
+  const conteudoOpacidade = useRef(new Animated.Value(1)).current;
+  const conteudoSlide = useRef(new Animated.Value(0)).current;
 
-  // Conteúdo interno de cada tela
-  const conteudoOpacidade = useRef(new Animated.Value(0)).current;
-  const conteudoSlide = useRef(new Animated.Value(24)).current;
+  const spinnerGiro = useRef(new Animated.Value(0)).current;
+  const spinnerLoop = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Fingerprint pulse
-  const fpEscala = useRef(new Animated.Value(1)).current;
-  const fpBrilho = useRef(new Animated.Value(0.4)).current;
-  const fpLoop = useRef<Animated.CompositeAnimation | null>(null);
-
-  // Checkmark
   const checkEscala = useRef(new Animated.Value(0)).current;
+  const sucessoOpacidade = useRef(new Animated.Value(0)).current;
 
-  // Confirmed amount slide
-  const valorOpacidade = useRef(new Animated.Value(0)).current;
-  const valorSlide = useRef(new Animated.Value(16)).current;
+  // Formato do teclado: "1,250 MT" (vírgula, sem decimais)
+  const formatarTeclado = (val: string) => {
+    if (!val) return '0';
+    const num = parseInt(val, 10) || 0;
+    return num.toLocaleString('pt-MZ').replace(/\s/g, '.');
+  };
 
-  // --- Splash ---
+  // Formato MZN: "MZN 1.250,00"
+  const formatarMZN = (val: string) => {
+    if (!val) return '0,00';
+    const num = parseInt(val, 10) || 0;
+    return (num / 100).toLocaleString('pt-MZ', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const adicionarDigito = (d: string) => {
+    if (rawValue.length >= 11) return;
+    setRawValue(p => p + d);
+  };
+  const removerDigito = () => setRawValue(p => p.slice(0, -1));
+  const adicionarPin = (d: string) => {
+    if (pin.length >= 4) return;
+    setPin(p => p + d);
+  };
+  const removerPin = () => setPin(p => p.slice(0, -1));
+
   useEffect(() => {
-    Animated.sequence([
-      Animated.delay(1),
-      Animated.parallel([
-        Animated.timing(moveLogo, {
-          toValue: -height * -0.05,
-          duration: 900,
-          easing: Easing.out(Easing.exp),
-          useNativeDriver: true,
-        }),
-        Animated.timing(buttonFade, {
-          toValue: 1,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start(() => setShowVersion(false));
-  }, []);
-
-  // --- Animações por etapa ---
-  useEffect(() => {
-    // Cancela loop do fingerprint se sair da etapa 6
-    if (etapa !== 6 && fpLoop.current) {
-      fpLoop.current.stop();
-      fpEscala.setValue(1);
-      fpBrilho.setValue(0.4);
+    if (etapa !== 2 && spinnerLoop.current) {
+      spinnerLoop.current.stop();
+      spinnerGiro.setValue(0);
     }
 
-    if (etapa <= 2) return;
+    if (etapa === 1) return;
 
-    // Reset + entrada do conteúdo
     conteudoOpacidade.setValue(0);
-    conteudoSlide.setValue(24);
+    conteudoSlide.setValue(20);
     Animated.parallel([
-      Animated.timing(conteudoOpacidade, {
-        toValue: 1,
-        duration: 380,
-        useNativeDriver: true,
-      }),
-      Animated.timing(conteudoSlide, {
-        toValue: 0,
-        duration: 380,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
+      Animated.timing(conteudoOpacidade, { toValue: 1, duration: 350, useNativeDriver: true }),
+      Animated.timing(conteudoSlide, { toValue: 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
 
-    // Fingerprint pulse (etapa 6)
-    if (etapa === 6) {
-      fpLoop.current = Animated.loop(
-        Animated.sequence([
-          Animated.parallel([
-            Animated.timing(fpEscala, { toValue: 1.1, duration: 700, useNativeDriver: true }),
-            Animated.timing(fpBrilho, { toValue: 0.15, duration: 700, useNativeDriver: true }),
-          ]),
-          Animated.parallel([
-            Animated.timing(fpEscala, { toValue: 1, duration: 700, useNativeDriver: true }),
-            Animated.timing(fpBrilho, { toValue: 0.4, duration: 700, useNativeDriver: true }),
-          ]),
-        ])
+    if (etapa === 2) {
+      setAprovado(false);
+      spinnerLoop.current = Animated.loop(
+        Animated.timing(spinnerGiro, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
       );
-      fpLoop.current.start();
+      spinnerLoop.current.start();
     }
 
-    // Checkmark bounce (etapa 8)
-    if (etapa === 8) {
+    if (etapa === 4) {
       checkEscala.setValue(0);
-      valorOpacidade.setValue(0);
-      valorSlide.setValue(16);
+      sucessoOpacidade.setValue(0);
       Animated.sequence([
-        Animated.delay(250),
-        Animated.spring(checkEscala, {
-          toValue: 1,
-          friction: 4,
-          tension: 50,
-          useNativeDriver: true,
-        }),
-        Animated.parallel([
-          Animated.timing(valorOpacidade, { toValue: 1, duration: 350, useNativeDriver: true }),
-          Animated.timing(valorSlide, { toValue: 0, duration: 350, useNativeDriver: true }),
-        ]),
+        Animated.delay(200),
+        Animated.spring(checkEscala, { toValue: 1, friction: 4, tension: 40, useNativeDriver: true }),
+        Animated.timing(sucessoOpacidade, { toValue: 1, duration: 350, useNativeDriver: true }),
       ]).start();
     }
   }, [etapa]);
 
-  // --- Navegação com transição ---
+  useEffect(() => {
+    if (etapa === 3 && pin.length === 4) {
+      const t = setTimeout(() => irPara(4), 300);
+      return () => clearTimeout(t);
+    }
+  }, [pin, etapa]);
+
   const irPara = (novaEtapa: number) => {
     if (bloqueado) return;
     setBloqueado(true);
     Animated.parallel([
-      Animated.timing(telaOpacidade, { toValue: 0, duration: 160, useNativeDriver: true }),
-      Animated.timing(telaSlide, { toValue: -12, duration: 160, useNativeDriver: true }),
+      Animated.timing(telaOpacidade, { toValue: 0, duration: 140, useNativeDriver: true }),
+      Animated.timing(telaSlide, { toValue: -8, duration: 140, useNativeDriver: true }),
     ]).start(() => {
+      if (novaEtapa === 3) setPin('');
       setEtapa(novaEtapa);
-      telaSlide.setValue(12);
+      telaSlide.setValue(8);
       Animated.parallel([
-        Animated.timing(telaOpacidade, { toValue: 1, duration: 260, useNativeDriver: true }),
-        Animated.timing(telaSlide, { toValue: 0, duration: 260, useNativeDriver: true }),
+        Animated.timing(telaOpacidade, { toValue: 1, duration: 240, useNativeDriver: true }),
+        Animated.timing(telaSlide, { toValue: 0, duration: 240, useNativeDriver: true }),
       ]).start(() => setBloqueado(false));
     });
   };
 
-  // --- Componentes auxiliares ---
-  const Header = () => (
-    <View style={s.header}>
-      <Text style={s.logoText}>Pega-Paga | M-Pesa</Text>
-    </View>
-  );
-
-  const BotaoPrincipal = ({ children, onPress, estilo }: { children: React.ReactNode; onPress: () => void; estilo?: any }) => (
-    <TouchableOpacity
-      style={[s.mainButton, estilo]}
-      activeOpacity={0.75}
-      onPress={onPress}
-    >
-      <Text style={s.buttonText}>{children}</Text>
-    </TouchableOpacity>
-  );
-
-  const BotaoOutline = ({ children, onPress, estilo }: { children: React.ReactNode; onPress: () => void; estilo?: any }) => (
-    <TouchableOpacity
-      style={[s.outlineButton, estilo]}
-      activeOpacity={0.7}
-      onPress={onPress}
-    >
-      <Text style={s.outlineButtonText}>{children}</Text>
-    </TouchableOpacity>
-  );
-
-  // Ícone fingerprint com View pura
-  const FingerprintIcone = () => (
-    <View style={s.fpContainer}>
-      {[44, 32, 20, 10].map((tam, i) => (
-        <View
-          key={i}
-          style={{
-            width: tam,
-            height: tam,
-            borderRadius: tam / 2,
-            borderWidth: 2.5,
-            borderColor: '#EB3324',
-            position: 'absolute',
-          }}
-        />
-      ))}
-    </View>
-  );
-
-  // Ícone QR Code com View pura (Grid simulando um QR)
-  const QrCodeIcone = () => {
-    const pattern = [
-      [1,1,1,0,1,0,1,1,1],
-      [1,0,1,0,0,0,1,0,1],
-      [1,1,1,0,1,0,1,1,1],
-      [0,0,0,0,1,0,0,0,0],
-      [1,0,1,1,0,1,1,0,1],
-      [0,0,0,0,1,0,0,0,0],
-      [1,1,1,0,0,0,1,1,1],
-      [1,0,1,0,1,0,1,0,1],
-      [1,1,1,0,1,0,1,1,1],
-    ];
-    return (
-      <View style={s.qrWrapper}>
-        {pattern.map((row, r) => (
-          <View key={r} style={s.qrRow}>
-            {row.map((cell, c) => (
-              <View key={c} style={[s.qrCell, cell ? s.qrCellBlack : null]} />
-            ))}
-          </View>
-        ))}
-      </View>
-    );
+  const handleFingerprintTap = () => {
+    if (spinnerLoop.current) {
+      spinnerLoop.current.stop();
+      spinnerGiro.setValue(0);
+    }
+    setAprovado(true);
   };
 
-  // ===================== RENDER =====================
+  const Spinner = () => (
+    <Animated.View style={{
+      transform: [{
+        rotate: spinnerGiro.interpolate({
+          inputRange: [0, 1],
+          outputRange: ['0deg', '360deg'],
+        }),
+      }],
+    }}>
+      <View style={s.spinnerContainer}>
+        {[0, 45, 90, 135, 180, 225, 270, 315].map((graus, i) => (
+          <View
+            key={i}
+            style={[
+              s.spinnerSegmento,
+              { transform: [{ rotate: `${graus}deg` }] },
+              i % 2 === 0 ? s.spinnerOpaco : s.spinnerTransparente,
+            ]}
+          />
+        ))}
+      </View>
+    </Animated.View>
+  );
+
   return (
-    <SafeAreaView style={s.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={[s.container, etapa === 2 && s.containerBranco, etapa === 4 && s.containerVerde]}>
+      <StatusBar
+        barStyle={etapa === 2 ? 'dark-content' : 'light-content'}
+        backgroundColor={etapa === 2 ? '#FFFFFF' : etapa === 4 ? '#28a745' : '#0C0C0C'}
+      />
 
       <Animated.View style={[s.telaWrapper, {
         opacity: telaOpacidade,
         transform: [{ translateY: telaSlide }],
       }]}>
 
-        {/* === ETAPA 1 & 2: Splash === */}
-        {etapa <= 2 && (
-          <View style={s.content}>
-            <Animated.View style={[s.centerBox, { transform: [{ translateY: moveLogo }] }]}>
-              <Text style={s.logoGrande}>Pega-Paga</Text>
-              <Text style={s.logoSub}>| M-Pesa</Text>
+        {/* ========== ETAPA 1: TECLADO ========== */}
+        {etapa === 1 && (
+          <View style={s.tela}>
+            {/* Header */}
+            <View style={s.headerTeclado}>
+              <Text style={s.headerTitulo}>Novo Pedido</Text>
+              <View style={s.terminalAtivo}>
+                <View style={s.terminalDot} />
+                <Text style={s.terminalTexto}>TERMINAL ATIVO</Text>
+              </View>
+            </View>
 
-              <Animated.View style={{ opacity: buttonFade, width: '100%', marginTop: 28 }}>
-                <BotaoPrincipal onPress={() => irPara(4)}>
-                  Começar Pagamento
-                </BotaoPrincipal>
-              </Animated.View>
-            </Animated.View>
+            {/* Display */}
+            <View style={s.displayArea}>
+              <Text style={s.displayLabel}>VALOR A COBRAR</Text>
+              <View style={s.displayLinha}>
+                <Text style={s.displayValor}>{formatarTeclado(rawValue)}</Text>
+                <Text style={s.displayMt}>MT</Text>
+              </View>
+            </View>
 
-            <View style={s.footer}>
-              {showVersion && <Text style={s.footerText}></Text>}
+            {/* Teclado */}
+            <View style={s.tecladoArea}>
+              {[['1','2','3'],['4','5','6'],['7','8','9'],['','0','⌫']].map((linha, ri) => (
+                <View key={ri} style={s.tecladoLinha}>
+                  {linha.map((tecla, ci) => (
+                    <TouchableOpacity
+                      key={ci}
+                      style={[s.tecla, !tecla && { backgroundColor: 'transparent', borderWidth: 0 }]}
+                      activeOpacity={0.5}
+                      disabled={!tecla}
+                      onPress={() => {
+                        if (tecla === '⌫') removerDigito();
+                        else adicionarDigito(tecla);
+                      }}
+                    >
+                      <Text style={[s.teclaTexto, !tecla && { color: 'transparent' }]}>{tecla}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ))}
+            </View>
+
+            {/* Botão Cobrar */}
+            <View style={s.botaoArea}>
+              <TouchableOpacity
+                style={[s.botaoCobrar, rawValue.length === 0 && s.botaoCobrarOff]}
+                activeOpacity={0.8}
+                disabled={rawValue.length === 0}
+                onPress={() => irPara(2)}
+              >
+                <Text style={[s.botaoCobrarTexto, rawValue.length === 0 && s.botaoCobrarTextoOff]}>
+                  Cobrar
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* === ETAPA 4: Montante === */}
-        {etapa === 4 && (
-          <View style={s.fullWidth}>
-            <Header />
-            <Animated.View style={[s.stageContent, {
+        {/* ========== ETAPA 2: FINGERPRINT TELA BRANCA ========== */}
+        {etapa === 2 && (
+          <View style={s.telaBranca}>
+            <View style={s.topBarBranco}>
+              <View style={s.topBarLineBranco} />
+            </View>
+
+            <Animated.View style={[s.fpContentBranco, {
               opacity: conteudoOpacidade,
               transform: [{ translateY: conteudoSlide }],
             }]}>
-              <Text style={s.label}>Insira um Montante:</Text>
-              <Text style={s.amountDisplay}>
-                <Text style={s.currency}>MZN </Text>0.00
-              </Text>
+              <Text style={s.fpCobrancaTitulo}>Cobrança</Text>
+              <Text style={s.fpCobrancaValor}>MZN {formatarMZN(rawValue)}</Text>
 
-              {/* Teclado numérico simplificado */}
-              <View style={s.teclado}>
+              <View style={s.fpSpinnerArea}>
+                {!aprovado ? (
+                  <TouchableOpacity activeOpacity={0.8} onPress={handleFingerprintTap}>
+                    <Spinner />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={s.fpCheckContainer}>
+                    <View style={s.fpCheckCircle}>
+                      <Text style={s.fpCheckIcon}>✓</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              <Text style={s.fpInstrucao}>
+                {!aprovado
+                  ? 'Toque com o dedo para confirmar'
+                  : 'Identidade confirmada'}
+              </Text>
+            </Animated.View>
+
+            <Animated.View style={[s.fpBotoesBranco, { opacity: conteudoOpacidade }]}>
+              <TouchableOpacity
+                style={[s.fpBotaoVermelho, !aprovado && s.fpBotaoVermelhoOff]}
+                activeOpacity={0.8}
+                disabled={!aprovado}
+                onPress={() => irPara(3)}
+              >
+                <Text style={[s.fpBotaoVermelhoTexto, !aprovado && s.fpBotaoVermelhoTextoOff]}>
+                  {!aprovado ? 'aguardando aprovação...' : 'Confirmado'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.fpBotaoOutline} activeOpacity={0.7}>
+                <Text style={s.fpBotaoOutlineTexto}>Enviar Link de Pagamento</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.fpBotaoCancelar} activeOpacity={0.7} onPress={() => irPara(1)}>
+                <Text style={s.fpBotaoCancelarTexto}>Cancelar</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        )}
+
+        {/* ========== ETAPA 3: PIN ========== */}
+        {etapa === 3 && (
+          <View style={s.tela}>
+            <View style={s.topBar}>
+              <View style={s.topBarLine} />
+            </View>
+            <Animated.View style={[s.centerContent, {
+              opacity: conteudoOpacidade,
+              transform: [{ translateY: conteudoSlide }],
+            }]}>
+              <Text style={s.valorTopo}>MZN {formatarMZN(rawValue)}</Text>
+              <Text style={s.pinTitulo}>Insira o PIN</Text>
+              <View style={s.pinDots}>
+                {[0,1,2,3].map(i => (
+                  <View key={i} style={[s.pinDot, pin.length > i && s.pinDotCheio]} />
+                ))}
+              </View>
+            </Animated.View>
+            <Animated.View style={{ opacity: conteudoOpacidade }}>
+              <View style={s.tecladoArea}>
                 {[['1','2','3'],['4','5','6'],['7','8','9'],['','0','⌫']].map((linha, ri) => (
                   <View key={ri} style={s.tecladoLinha}>
                     {linha.map((tecla, ci) => (
                       <TouchableOpacity
                         key={ci}
-                        style={[s.tecla, !tecla && { backgroundColor: 'transparent' }]}
-                        activeOpacity={0.6}
+                        style={[s.tecla, !tecla && { backgroundColor: 'transparent', borderWidth: 0 }]}
+                        activeOpacity={0.5}
                         disabled={!tecla}
+                        onPress={() => {
+                          if (tecla === '⌫') removerPin();
+                          else adicionarPin(tecla);
+                        }}
                       >
                         <Text style={[s.teclaTexto, !tecla && { color: 'transparent' }]}>{tecla}</Text>
                       </TouchableOpacity>
@@ -268,166 +308,44 @@ export default function Index() {
                   </View>
                 ))}
               </View>
-
-              <BotaoPrincipal onPress={() => irPara(5)} estilo={{ marginTop: 'auto', marginBottom: 20, paddingHorizontal: 20 }}>
-                Avançar
-              </BotaoPrincipal>
             </Animated.View>
           </View>
         )}
 
-        {/* === ETAPA 5: Método === */}
-        {etapa === 5 && (
-          <View style={s.fullWidth}>
-            <Header />
-            <Animated.View style={[s.stageContent, {
+        {/* ========== ETAPA 4: SUCESSO VERDE ========== */}
+        {etapa === 4 && (
+          <View style={s.telaVerde}>
+            <View style={s.topBarVerde}>
+              <View style={s.topBarLineVerde} />
+            </View>
+            <Animated.View style={[s.centerContentVerde, {
               opacity: conteudoOpacidade,
               transform: [{ translateY: conteudoSlide }],
             }]}>
-              <Text style={s.label}>Montante:</Text>
-              <Text style={s.amountDisplay}>
-                <Text style={s.currency}>MZN </Text>{valor}
-              </Text>
-
-              <Text style={s.subLabel}>Meios de Pagamento:</Text>
-
-              <View style={s.row}>
-                <BotaoOutline onPress={() => irPara(6)} estilo={s.halfBtn}>
-                  Fingerprint
-                </BotaoOutline>
-                <BotaoPrincipal onPress={() => irPara(7)} estilo={s.halfBtn}>
-                  PIN
-                </BotaoPrincipal>
-              </View>
-
-              {/* Alterado para ir para a nova ETAPA 9 */}
-              <BotaoOutline onPress={() => irPara(9)} estilo={{ width: '100%', marginTop: 10 }}>
-                QR CODE
-              </BotaoOutline>
-            </Animated.View>
-          </View>
-        )}
-
-        {/* === ETAPA 6: Fingerprint === */}
-        {etapa === 6 && (
-          <View style={s.fullWidth}>
-            <Header />
-            <Text style={s.amountSmall}>MZN {valor}</Text>
-
-            <Animated.View style={[s.cartaoBranco, {
-              opacity: conteudoOpacidade,
-              transform: [{ translateY: conteudoSlide }],
-            }]}>
-              <Text style={s.textoPreto}>Toque no sensor</Text>
-
-              <Animated.View style={{
-                marginTop: 50,
-                transform: [{ scale: fpEscala }],
-                opacity: fpBrilho,
-              }}>
-                <View style={s.fpGlow} />
-              </Animated.View>
-
-              <View style={{ marginTop: -90 }}>
-                <FingerprintIcone />
-              </View>
-
-              <BotaoPrincipal onPress={() => irPara(8)} estilo={{ marginTop: 60, backgroundColor: '#000' }}>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>Confirmar</Text>
-              </BotaoPrincipal>
-            </Animated.View>
-          </View>
-        )}
-
-        {/* === ETAPA 7: PIN === */}
-        {etapa === 7 && (
-          <View style={s.fullWidth}>
-            <Header />
-            <Text style={s.amountSmall}>MZN {valor}</Text>
-
-            <Animated.View style={[s.cartaoBranco, {
-              opacity: conteudoOpacidade,
-              transform: [{ translateY: conteudoSlide }],
-            }]}>
-              <Text style={s.textoPreto}>Número do celular</Text>
-              <View style={s.campoInput}>
-                <Text style={s.inputPlaceholder}>+258 84 XXX XXX</Text>
-              </View>
-
-              <Text style={[s.textoPreto, { marginTop: 24 }]}>Insira o PIN</Text>
-              <View style={s.pinDots}>
-                {[0,1,2,3].map(i => (
-                  <View key={i} style={s.pinDot} />
-                ))}
-              </View>
-
-              <BotaoPrincipal onPress={() => irPara(8)} estilo={{ marginTop: 30, backgroundColor: '#000' }}>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>Confirmar</Text>
-              </BotaoPrincipal>
-            </Animated.View>
-          </View>
-        )}
-
-        {/* === ETAPA 9: QR Code (NOVA TELA) === */}
-        {etapa === 9 && (
-          <View style={s.fullWidth}>
-            <Header />
-            <Text style={s.amountSmall}> MZN {valor}</Text>
-
-            <Animated.View style={[s.cartaoBranco, {
-              opacity: conteudoOpacidade,
-              transform: [{ translateY: conteudoSlide }],
-            }]}>
-              <Text style={s.textoPreto}>QR Code</Text>
-
-              <View style={s.qrBox}>
-                <QrCodeIcone />
-              </View>
-
-              <Text style={[s.textoPreto, { marginTop: 24, textAlign: 'center' }]}>
-                Abra o app do M-Pesa
-              </Text>
-
-              <BotaoPrincipal onPress={() => irPara(8)} estilo={{ marginTop: 30, backgroundColor: '#000' }}>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>Confirmar Pagamento</Text>
-              </BotaoPrincipal>
-            </Animated.View>
-          </View>
-        )}
-
-        {/* === ETAPA 8: Confirmado === */}
-        {etapa === 8 && (
-          <View style={s.fullWidth}>
-            <Header />
-            <Animated.View style={[s.stageContent, {
-              opacity: conteudoOpacidade,
-              transform: [{ translateY: conteudoSlide }],
-            }]}>
-              <Text style={s.confirmadoTexto}>Confirmado</Text>
-
+              <Text style={s.comprovanteTitulo}>Comprovante</Text>
               <Animated.View style={{ transform: [{ scale: checkEscala }] }}>
-                <View style={s.checkCircle}>
-                  <Text style={s.checkIcon}>✓</Text>
+                <View style={s.checkCircleVerde}>
+                  <Text style={s.checkIconVerde}>✓</Text>
                 </View>
               </Animated.View>
-
-              <Animated.View style={{
-                opacity: valorOpacidade,
-                transform: [{ translateY: valorSlide }],
-                alignItems: 'center',
-              }}>
-                <Text style={s.amountDisplay}>
-                  <Text style={s.currency}>MZN </Text>{valor}
-                </Text>
+              <Animated.View style={[s.sucessoConteudoVerde, { opacity: sucessoOpacidade }]}>
+                <Text style={s.sucessoTituloVerde}>Pagamento Autorizado</Text>
+                <Text style={s.sucessoSubtituloVerde}>Via M-Pesa</Text>
+                <View style={s.sucessoDivisorVerde} />
+                <Text style={s.sucessoValorVerde}>MZN {formatarMZN(rawValue)}</Text>
               </Animated.View>
-
-              <TouchableOpacity style={{ marginTop: 16 }}>
-                <Text style={s.linkBranco}>Ver extrato</Text>
+            </Animated.View>
+            <Animated.View style={[s.sucessoBotoesVerde, { opacity: sucessoOpacidade }]}>
+              <TouchableOpacity
+                style={s.botaoOutlineVerde}
+                activeOpacity={0.7}
+                onPress={() => { setRawValue(''); irPara(1); }}
+              >
+                <Text style={s.botaoOutlineTextoVerde}>Nova Venda</Text>
               </TouchableOpacity>
-
-              <BotaoOutline onPress={() => irPara(2)} estilo={{ marginTop: 24 }}>
-                Novo Pagamento
-              </BotaoOutline>
+              <TouchableOpacity style={s.botaoBrancoVerde} activeOpacity={0.8}>
+                <Text style={s.botaoBrancoTextoVerde}>Emitir Recibo</Text>
+              </TouchableOpacity>
             </Animated.View>
           </View>
         )}
@@ -438,272 +356,419 @@ export default function Index() {
 }
 
 const s = StyleSheet.create({
-  container: {
+  // === CONTAINERS ===
+  container: { flex: 1, backgroundColor: '#0C0C0C' },
+  containerBranco: { backgroundColor: '#FFFFFF' },
+  containerVerde: { backgroundColor: '#28a745' },
+  telaWrapper: { flex: 1 },
+  tela: {
     flex: 1,
-    backgroundColor: '#EB3324',
-  },
-  telaWrapper: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
     paddingHorizontal: 24,
+    justifyContent: 'space-between',
+    paddingVertical: 16,
   },
-  fullWidth: {
-    width: '100%',
+  telaBranca: {
     flex: 1,
+    justifyContent: 'space-between',
+    paddingVertical: 16,
   },
-  stageContent: {
+  telaVerde: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
+    justifyContent: 'space-between',
+    paddingVertical: 20,
   },
+  centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  centerContentVerde: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  // Header
-  header: {
-    marginTop: 36,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  logoText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-  },
+  // === TOP BAR ===
+  topBar: { alignItems: 'center', paddingTop: 8, paddingBottom: 4 },
+  topBarLine: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#1F1F1F' },
+  topBarBranco: { alignItems: 'center', paddingTop: 8, paddingBottom: 4 },
+  topBarLineBranco: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E0E0E0' },
+  topBarVerde: { alignItems: 'center', paddingTop: 8, paddingBottom: 4 },
+  topBarLineVerde: { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)' },
 
-  // Splash
-  centerBox: {
+  // ==============================
+  // ETAPA 1: TECLADO (cópia fiel)
+  // ==============================
+  headerTeclado: {
     alignItems: 'center',
-    width: '100%',
-  },
-  logoGrande: {
-    color: '#FFFFFF',
-    fontSize: 36,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-  },
-  logoSub: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '300',
-    fontFamily: 'monospace',
-    opacity: 0.8,
-  },
-
-  // Labels e textos
-  label: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 70,
+    marginTop: 8,
     marginBottom: 8,
   },
-  subLabel: {
+  headerTitulo: {
     color: '#FFFFFF',
-    fontSize: 14,
-    alignSelf: 'flex-start',
-    marginTop: 32,
-    marginBottom: 12,
-    opacity: 0.85,
-  },
-  amountDisplay: {
-    color: '#FFFFFF',
-    fontSize: 56,
-    fontWeight: 'bold',
-    marginBottom: 36,
-    fontFamily: 'calibri',
-  },
-  amountSmall: {
-    color: '#FFFFFF',
-    fontSize: 38,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 16,
-    fontFamily: 'monospace',
-  },
-  currency: {
     fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 14,
   },
-
-  // Botões
-  mainButton: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 18,
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    paddingHorizontal: 24,
-  },
-  outlineButton: {
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 14,
-  },
-  buttonText: {
-    color: '#EB3324',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  outlineButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  row: {
+  terminalAtivo: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(40, 167, 69, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
   },
-  halfBtn: {
-    width: '48%',
+  terminalDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#28a745',
   },
-
-  // Teclado numérico
-  teclado: {
-    width: '100%',
-    marginBottom: 16,
+  terminalTexto: {
+    color: '#28a745',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
+  displayArea: {
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+    minHeight: 100,
+    justifyContent: 'center',
+  },
+  displayLabel: {
+    color: '#666666',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    marginBottom: 10,
+  },
+  displayLinha: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  displayValor: {
+    color: '#FFFFFF',
+    fontSize: 48,
+    fontWeight: '300',
+    fontFamily: 'monospace',
+    letterSpacing: 2,
+    lineHeight: 52,
+  },
+  displayMt: {
+    color: '#555555',
+    fontSize: 20,
+    fontWeight: '500',
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  tecladoArea: {
+    flex: 1,
+    justifyContent: 'center',
+    maxHeight: 320,
   },
   tecladoLinha: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   tecla: {
     width: '29%',
-    height: 54,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    height: 58,
+    backgroundColor: '#161616',
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#222222',
   },
   teclaTexto: {
     color: '#FFFFFF',
     fontSize: 22,
-    fontWeight: '500',
+    fontWeight: '400',
   },
-
-  // Cartão branco (fingerprint / PIN / QR)
-  cartaoBranco: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    flex: 1,
-    padding: 36,
+  botaoArea: {
+    marginBottom: 12,
+  },
+  botaoCobrar: {
+    backgroundColor: '#EB3324',
+    paddingVertical: 18,
     alignItems: 'center',
+    borderRadius: 12,
+    shadowColor: '#EB3324',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  textoPreto: {
-    color: '#000',
-    fontSize: 17,
-    fontWeight: 'bold',
+  botaoCobrarOff: {
+    backgroundColor: '#1A1A1A',
+    shadowOpacity: 0,
+    elevation: 0,
+    borderWidth: 1,
+    borderColor: '#222222',
   },
-  campoInput: {
-    width: '100%',
-    borderBottomWidth: 2,
-    borderBottomColor: '#CCC',
-    paddingVertical: 12,
-    marginTop: 8,
-    marginBottom: 4,
+  botaoCobrarTexto: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
-  inputPlaceholder: {
-    color: '#AAA',
-    fontSize: 20,
-    fontFamily: 'monospace',
-  },
-  pinDots: {
-    flexDirection: 'row',
-    gap: 18,
-    marginTop: 16,
-  },
-  pinDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#333',
-    backgroundColor: 'transparent',
+  botaoCobrarTextoOff: {
+    color: '#333333',
   },
 
-  // Fingerprint
-  fpContainer: {
-    width: 72,
-    height: 72,
+  // ==============================
+  // ETAPA 2: FINGERPRINT BRANCO
+  // ==============================
+  fpContentBranco: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  fpCobrancaTitulo: {
+    color: '#1A1A1A',
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  fpCobrancaValor: {
+    color: '#1A1A1A',
+    fontSize: 32,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+    letterSpacing: 1,
+    marginBottom: 48,
+  },
+  fpSpinnerArea: {
+    width: 64,
+    height: 64,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  spinnerContainer: {
+    width: 64,
+    height: 64,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  fpGlow: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+  spinnerSegmento: {
+    position: 'absolute',
+    width: 6,
+    height: 18,
+    borderRadius: 3,
     backgroundColor: '#EB3324',
+    top: 2,
+    left: 29,
+    transformOrigin: '3px 30px',
   },
-
-  // QR Code (Novo)
-  qrBox: {
-    marginTop: 40,
-    padding: 16,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
+  spinnerOpaco: { opacity: 1 },
+  spinnerTransparente: { opacity: 0.15 },
+  fpCheckContainer: {
+    width: 64,
+    height: 64,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  qrWrapper: {
-    flexDirection: 'column',
-  },
-  qrRow: {
-    flexDirection: 'row',
-  },
-  qrCell: {
-    width: 20,
-    height: 20,
-    backgroundColor: '#FFF',
-  },
-  qrCellBlack: {
-    backgroundColor: '#000',
-  },
-
-  // Confirmado
-  confirmadoTexto: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  checkCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  fpCheckCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#28a745',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
   },
-  checkIcon: {
-    color: '#FFF',
-    fontSize: 36,
-    fontWeight: 'bold',
-  },
-  linkBranco: {
+  fpCheckIcon: {
     color: '#FFFFFF',
-    textDecorationLine: 'underline',
+    fontSize: 32,
+    fontWeight: '700',
+  },
+  fpInstrucao: {
+    color: '#888888',
+    fontSize: 15,
+    fontWeight: '400',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  fpBotoesBranco: {
+    width: '100%',
+    paddingHorizontal: 28,
+    gap: 10,
+  },
+  fpBotaoVermelho: {
+    backgroundColor: '#EB3324',
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 12,
+    shadowColor: '#EB3324',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  fpBotaoVermelhoOff: {
+    backgroundColor: '#B0B0B0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  fpBotaoVermelhoTexto: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  fpBotaoVermelhoTextoOff: {
+    color: '#E0E0E0',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  fpBotaoOutline: {
+    borderWidth: 2,
+    borderColor: '#EB3324',
+    backgroundColor: 'transparent',
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  fpBotaoOutlineTexto: {
+    color: '#EB3324',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  fpBotaoCancelar: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  fpBotaoCancelarTexto: {
+    color: '#AAAAAA',
     fontSize: 14,
-    opacity: 0.85,
+    fontWeight: '500',
   },
 
-  // Footer
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    alignSelf: 'center',
-  },
-  footerText: {
+  // ==============================
+  // ETAPA 3: PIN
+  // ==============================
+  valorTopo: {
     color: '#FFFFFF',
-    fontSize: 12,
-    opacity: 0.5,
+    fontSize: 18,
+    fontFamily: 'monospace',
+    opacity: 0.7,
+    marginBottom: 50,
+    letterSpacing: 1,
+  },
+  pinTitulo: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 36,
+  },
+  pinDots: { flexDirection: 'row', gap: 22 },
+  pinDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#333333',
+    backgroundColor: 'transparent',
+  },
+  pinDotCheio: {
+    backgroundColor: '#EB3324',
+    borderColor: '#EB3324',
+  },
+
+  // ==============================
+  // ETAPA 4: SUCESSO VERDE
+  // ==============================
+  comprovanteTitulo: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: 1,
+    opacity: 0.8,
+    marginBottom: 36,
+  },
+  checkCircleVerde: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 28,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  checkIconVerde: {
+    color: '#28a745',
+    fontSize: 44,
+    fontWeight: '700',
+  },
+  sucessoConteudoVerde: { alignItems: 'center' },
+  sucessoTituloVerde: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  sucessoSubtituloVerde: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+    opacity: 0.85,
+    marginTop: 2,
+  },
+  sucessoDivisorVerde: {
+    width: 50,
+    height: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginVertical: 20,
+    borderRadius: 1,
+  },
+  sucessoValorVerde: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+    letterSpacing: 1,
+  },
+  sucessoBotoesVerde: {
+    width: '100%',
+    gap: 12,
+    marginBottom: 16,
+  },
+  botaoOutlineVerde: {
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: 'transparent',
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 14,
+  },
+  botaoOutlineTextoVerde: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  botaoBrancoVerde: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  botaoBrancoTextoVerde: {
+    color: '#28a745',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
